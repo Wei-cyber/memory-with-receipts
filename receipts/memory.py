@@ -42,7 +42,7 @@ def log_event(type_: str, memory: dict, actor: str, **detail) -> None:
     })
 
 
-def _embed_text(text: str, service: str | None) -> str:
+def embed_text(text: str, service: str | None) -> str:
     return f"[{service}] {text}" if service else text
 
 
@@ -62,7 +62,7 @@ def write(p: Principal, text: str, *, audience: list[str] | None = None, service
         "_id": mem_id, "lineage_id": lineage_id, "version": version,
         "audience": audience, "team": p.team or "org", "status": "active", "kind": kind,
         "service": service, "text": text, "content_hash": content_hash(text),
-        "embedding": embed.embed([_embed_text(text, service)], "document")[0], "embedder": embed.name(),
+        "embedding": embed.embed([embed_text(text, service)], "document")[0], "embedder": embed.name(),
         "suggested_action": suggested_action, "avoid_action": avoid_action,
         "created_at": created, "created_by": p.id, "source_receipt": source_receipt,
         "ttl_days": ttl_days, "expires_at": created + timedelta(days=ttl_days) if ttl_days else FOREVER,

@@ -68,6 +68,11 @@ SCENARIOS = [
 ]
 
 
+STALE_TEXT = ("Release freeze in effect for checkout-api: do not flush or restart anything "
+              "without the release manager; page a human for any latency alert.")
+STALE_TEXT_EMBED = memory.embed_text(STALE_TEXT, "checkout-api")
+
+
 def seed(quiet: bool = False) -> None:
     db = get_db()
     for name in ("memories", "receipts", "memory_events", "principals", "actions"):
@@ -75,12 +80,17 @@ def seed(quiet: bool = False) -> None:
     ensure_schema(db)
     db.principals.insert_many(PRINCIPALS)
 
+    # One batched embedding request for all seed memories and demo alerts,
+    # instead of one each - keeps the seed inside Voyage's free-tier rate limit.
+    embed.embed([memory.embed_text(kw["text"], kw.get("service")) for _, kw in MEMORIES] + [STALE_TEXT_EMBED],
+                "document")
+    embed.embed([f"[{s['service']}] {s['title']}. {s['body']}" for s in SCENARIOS], "query")
+
     docs = [memory.write(resolve(author), **kwargs, _wait=False) for author, kwargs in MEMORIES]
 
     # One that has already lapsed: a freeze rule from last quarter.
     stale = memory.write(resolve("alice"), _wait=False, service="checkout-api", ttl_days=30,
-                         text="Release freeze in effect for checkout-api: do not flush or restart anything "
-                              "without the release manager; page a human for any latency alert.",
+                         text=STALE_TEXT,
                          suggested_action={"action": "page_human", "target": "checkout-api"})
     db.memories.update_one({"_id": stale["_id"]}, {"$set": {
         "created_at": stale["created_at"] - timedelta(days=31),
