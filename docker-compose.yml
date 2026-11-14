@@ -1,0 +1,6 @@
+# Local stand-in for Atlas, with real $vectorSearch. For dev/tests only -
+# the demo runs against the hackathon Atlas sandbox via MONGODB_URI.
+services:
+  atlas:
+    image: mongodb/mongodb-atlas-local:latest
+    ports: ["27017:27017"]
