@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from . import agent, brain, embed, memory
+from . import agent, brain, embed, memory, voice
 from .db import FOREVER, ensure_schema, get_db
 from .identity import Forbidden, Principal, agent_for, resolve
 
@@ -86,6 +86,7 @@ def meta():
         "principals": [resolve(p["_id"]).public() for p in db.principals.find().sort("_id", 1)],
         "scenarios": SCENARIOS, "actions": brain.ACTIONS,
         "brain": brain.name(), "embedder": embed.name(), "database": db.name,
+        "voice": "elevenlabs" if voice.enabled() else "browser",
     }
 
 
@@ -130,6 +131,24 @@ def verify(viewer: Principal = Depends(me)):
 @app.get("/api/receipts/{receipt_id}")
 def get_receipt(receipt_id: str, viewer: Principal = Depends(me)):
     return _receipt_view(viewer, agent.get_receipt(viewer, receipt_id))
+
+
+@app.get("/api/receipts/{receipt_id}/page")
+def page_text(receipt_id: str, viewer: Principal = Depends(me)):
+    """The spoken on-call page for this receipt, as this viewer may hear it."""
+    view = _receipt_view(viewer, agent.get_receipt(viewer, receipt_id))
+    return {"text": voice.script(view), "voice": "elevenlabs" if voice.enabled() else "browser"}
+
+
+@app.get("/api/receipts/{receipt_id}/page/audio")
+def page_audio(receipt_id: str, viewer: Principal = Depends(me)):
+    if not voice.enabled():
+        raise HTTPException(503, "ELEVENLABS_API_KEY is not set")
+    view = _receipt_view(viewer, agent.get_receipt(viewer, receipt_id))
+    try:
+        return Response(voice.speak(voice.script(view)), media_type="audio/mpeg")
+    except Exception as exc:  # the browser falls back to its own voice
+        raise HTTPException(502, str(exc))
 
 
 class OutcomeIn(BaseModel):

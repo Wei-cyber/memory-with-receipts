@@ -25,3 +25,9 @@ TOP_K = 5
 
 # A memory that fails this many times is pulled from retrieval until a human reviews it.
 QUARANTINE_STRIKES = 2
+
+# Voice: the spoken on-call page (ElevenLabs text-to-speech). Without a key the
+# UI falls back to the browser's built-in speech.
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY") or None
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
+ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_flash_v2_5")

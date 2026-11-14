@@ -81,6 +81,10 @@
   .receipt input { background: #fffdf5; border-color: var(--paper-line); color: var(--paper-ink); font-family: system-ui, sans-serif; }
   .diff { border: 2px solid var(--paper-ink); border-radius: 4px; padding: 12px; margin-top: 12px; background: #fffdf5; }
   .diff .arrow { font-size: 16px; font-weight: 700; }
+  .pagebar { display: flex; align-items: center; gap: 14px; justify-content: center; margin-top: 12px; font-family: system-ui, sans-serif; }
+  .pagebar label { color: var(--paper-muted); font-size: 12px; display: flex; align-items: center; gap: 5px; }
+  .pagebar input { width: auto; padding: 0; }
+  .transcript { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--paper-ink); background: #fffdf5; font-style: italic; }
   .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
 
   /* vault */
@@ -104,7 +108,7 @@
 <body>
 <header>
   <h1>RECEIPTS<span>.</span></h1>
-  <span class="tag" id="t-brain"></span><span class="tag" id="t-embed"></span>
+  <span class="tag" id="t-brain"></span><span class="tag" id="t-embed"></span><span class="tag" id="t-voice"></span>
   <button class="small" id="verify">verify chain</button><span class="tag" id="t-chain">chain: unchecked</span>
   <span class="spacer"></span>
   <label for="who" class="tag" style="border:0">acting as</label>
@@ -148,7 +152,25 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let META = null, ME = null, CURRENT = null, LAST_DIFF = null;
+let META = null, ME = null, CURRENT = null, LAST_DIFF = null, AUTOPAGE = false, PLAYING = null;
+
+// The on-call page: the receipt, spoken, as the current viewer is allowed to hear it.
+function hush() { if (PLAYING) { PLAYING.pause(); PLAYING = null; } if (window.speechSynthesis) speechSynthesis.cancel(); }
+async function playPage(id, btn) {
+  hush();
+  if (btn) btn.disabled = true;
+  try {
+    const page = await api(`/receipts/${id}/page`);
+    const el = $("transcript"); if (el && CURRENT === id) { el.textContent = "\u201C" + page.text + "\u201D"; el.hidden = false; }
+    let res = null;
+    if (page.voice === "elevenlabs") res = await fetch(`/api/receipts/${id}/page/audio`, { headers: { "X-Principal": $("who").value } });
+    if (res && res.ok) { PLAYING = new Audio(URL.createObjectURL(await res.blob())); await PLAYING.play(); }
+    else {
+      if (res) toast("ElevenLabs unavailable, using the browser voice: " + ((await res.json().catch(() => ({}))).detail || res.status));
+      if (window.speechSynthesis) speechSynthesis.speak(new SpeechSynthesisUtterance(page.text));
+    }
+  } finally { if (btn) btn.disabled = false; }
+}
 
 async function api(path, opts = {}) {
   const res = await fetch("/api" + path, {
@@ -176,6 +198,7 @@ async function boot() {
   $("who").value = keep;
   $("t-brain").textContent = "brain: " + META.brain;
   $("t-embed").textContent = "embed: " + META.embedder;
+  $("t-voice").textContent = "voice: " + META.voice;
   $("scenarios").innerHTML = META.scenarios.map((s, i) =>
     `<button class="scenario" data-i="${i}">${esc(s.label)}<small>→ ${esc(s.team)} agent · ${esc(s.service)}</small></button>`).join("");
   await refresh();
@@ -248,6 +271,9 @@ function receiptHtml(r, diff) {
     <div class="sub">${esc(r._id)} · #${r.seq} · ${new Date(r.at).toLocaleString()}</div>
     <div class="sub">${esc(r.principal.id)} ${r.replay_of ? "· replay of " + esc(r.replay_of) : ""} · ${esc(r.decision.brain)}</div>
     ${diffHtml}
+    <div class="pagebar"><button class="primary" data-page="1">&#9654; Hear the on-call page</button>
+      <label><input type="checkbox" id="autopage" ${AUTOPAGE ? "checked" : ""}> page me on every new alert</label></div>
+    <div class="prose transcript" id="transcript" hidden></div>
     <hr><div class="lbl">Alert</div>
     <div class="prose"><b>${esc(r.alert.service)}</b> — ${esc(r.alert.title)}<br><span style="color:var(--paper-muted)">${esc(r.alert.body)}</span></div>
     <hr><div class="lbl">What the agent was allowed to see</div>
@@ -286,7 +312,7 @@ async function fire(alert, btn) {
   try {
     const r = await api("/alerts", { body: alert });
     if (r.readable === false) { toast(`Routed to ${r.routed_to}. Its receipt is not readable by ${ME.id}.`); await refresh(); }
-    else await show(r._id);
+    else { await show(r._id); if (AUTOPAGE) playPage(r._id); }
   } finally { if (btn) btn.disabled = false; }
 }
 
@@ -304,6 +330,7 @@ document.addEventListener("click", async (e) => {
   const t = e.target.closest("button, .rc"); if (!t) return;
   const d = t.dataset;
   if (d.i !== undefined) return fire(META.scenarios[d.i], t);
+  if (d.page) return playPage(CURRENT, t);
   if (t.classList.contains("rc")) return show(d.id);
   if (d.outcome) { t.disabled = true; await api(`/receipts/${CURRENT}/outcome`, { body: { status: d.outcome, note: $("note").value } }); return show(CURRENT); }
   if (d.replay) { t.disabled = true; try { const out = await api(`/receipts/${CURRENT}/replay`, { body: {} }); return show(out.replay._id, out.diff); } finally { t.disabled = false; } }
@@ -330,7 +357,9 @@ document.addEventListener("click", async (e) => {
   if (t.id === "reset") { if (!confirm("Wipe all memories and receipts and re-seed the demo?")) return; t.disabled = true;
     await api("/reset", { body: {} }); t.disabled = false; CURRENT = null; $("detail").innerHTML = '<div class="empty">Reset. Fire an alert.</div>'; return boot(); }
 });
+document.addEventListener("change", (e) => { if (e.target.id === "autopage") AUTOPAGE = e.target.checked; });
 $("who").addEventListener("change", async () => {
+  hush();
   await refresh();
   if (CURRENT) show(CURRENT, LAST_DIFF).catch(() => { CURRENT = null; $("detail").innerHTML = `<div class="empty">That receipt is not readable by ${esc(ME.id)}.</div>`; refresh(); });
 });

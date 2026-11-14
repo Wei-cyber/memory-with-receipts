@@ -26,6 +26,10 @@ A memory is marked **causal** on a receipt only if removing it flips the action.
 
 **Replay** re-runs any past receipt's alert against memory as it stands *now* (dry run, nothing executes) and diffs the two: which memories dropped out, why (superseded / expired / forgotten / quarantined), and whether the action changed. That is the "memory changes what it does on the next run" proof, on demand.
 
+## The on-call page, spoken
+
+On-call engineers get woken by a call, not a dashboard. **Hear the on-call page** reads the receipt aloud with ElevenLabs: what fired, what the agent did, which memory drove it, and what it would have done without it. The script is built from the receipt *as the listener is allowed to see it* — Alice hears the memory; the auditor hears "a payments team memory you are not cleared to hear". (`receipts/voice.py`)
+
 ## How each question is answered
 
 ### Who can read each memory
@@ -69,6 +73,7 @@ uvicorn receipts.api:app    # http://localhost:8000
 `.env`:
 - `MONGODB_URI` — Atlas connection string. (For local dev, `docker compose up -d` runs `mongodb-atlas-local`, which has real `$vectorSearch`.)
 - `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` — the model that makes decisions (Claude or OpenAI, structured output). With neither, a deterministic rule-based stub stands in so everything still runs.
+- `ELEVENLABS_API_KEY` — voice for the spoken on-call page. Without it the UI uses the browser's built-in speech.
 - `VOYAGE_API_KEY` — embeddings from Voyage AI (`voyage-3.5`, 1024 dims). Without it, a local hashing embedder stands in. Re-seed after switching embedders.
 
 Tests run against a real `$vectorSearch` (13 end-to-end cases covering isolation, correction, expiry, forgetting, quarantine, counterfactuals and chain integrity):
@@ -102,6 +107,7 @@ receipts/agent.py      the loop: retrieve → decide → counterfactuals → act
 receipts/brain.py      the decision (Claude or OpenAI, structured output) and the offline stub
 receipts/db.py         schema validation, indexes, vector index definition
 receipts/identity.py   principals, scopes, permissions
+receipts/voice.py      the spoken on-call page (ElevenLabs text-to-speech)
 receipts/api.py        FastAPI
 receipts/static/       single-page UI
 scripts/seed.py        demo data

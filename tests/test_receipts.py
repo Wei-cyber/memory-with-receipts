@@ -86,6 +86,18 @@ def test_auditor_reads_receipt_but_not_team_memory_text():
         agent.get_receipt(resolve("bob"), r["_id"])
 
 
+def test_spoken_page_follows_the_same_scopes():
+    from receipts import voice
+    from receipts.api import _receipt_view
+    r = agent.handle_alert(agent_for("payments"), CHECKOUT)
+    alice = voice.script(_receipt_view(resolve("alice"), r))
+    carol = voice.script(_receipt_view(resolve("carol"), r))
+    assert "flush connection pool on checkout-db-pool" in alice and "pgbouncer" in alice
+    assert "Without it, I would have chosen restart service" in alice
+    assert "pgbouncer" not in carol and "not cleared to hear" in carol
+    assert "withheld from me by scope" in alice and "mem_" not in alice
+
+
 # --- did the memory do anything
 
 def test_receipt_proves_memory_changed_the_action():
