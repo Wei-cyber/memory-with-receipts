@@ -2,8 +2,6 @@
 
 **An on-call agent whose memory a company could actually sign off on.**
 
-Built for *Agents in Context: A MongoDB Hackathon* (Toronto, Nov 14) — Statement Two, **Memory You Can Govern**.
-
 An agent with memory stores notes like *"last time checkout was slow, flushing the connection pool fixed it"* and looks them up later. Useful — and undeployable until someone can answer three questions:
 
 1. **Who can see each memory?** Payments' notes must not surface when Search's agent is working.
