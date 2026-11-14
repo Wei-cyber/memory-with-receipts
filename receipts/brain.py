@@ -58,21 +58,50 @@ def _memory_block(memories: list[dict]) -> str:
     return "<memories>\n" + "\n".join(parts) + "\n</memories>"
 
 
-def use_claude() -> bool:
-    if config.BRAIN == "stub":
-        return False
-    return config.BRAIN == "claude" or bool(config.ANTHROPIC_API_KEY)
+def provider() -> str:
+    """Which decision-maker is in use: an explicit RECEIPTS_BRAIN, else
+    whichever API key is present, else the offline stub."""
+    if config.BRAIN in ("claude", "openai", "stub"):
+        return config.BRAIN
+    if config.ANTHROPIC_API_KEY:
+        return "claude"
+    if config.OPENAI_API_KEY:
+        return "openai"
+    return "stub"
 
 
 def name() -> str:
-    return config.MODEL if use_claude() else "stub-rules"
+    return {"claude": config.MODEL, "openai": config.OPENAI_MODEL, "stub": "stub-rules"}[provider()]
 
 
 def decide(team: str, alert: dict, memories: list[dict]) -> dict:
-    d = _decide_claude(team, alert, memories) if use_claude() else _decide_stub(alert, memories)
+    fn = {"claude": _decide_claude, "openai": _decide_openai}.get(provider())
+    d = fn(team, alert, memories) if fn else _decide_stub(alert, memories)
     shown = {m["_id"] for m in memories}
     d["cited"] = [i for i in dict.fromkeys(d.pop("cited_memory_ids")) if i in shown]
     return d
+
+
+def _escalate(alert: dict, why: str) -> dict:
+    return {"action": "page_human", "target": alert["service"], "cited_memory_ids": [],
+            "rationale": f"Model returned no decision ({why}); escalating."}
+
+
+def _decide_openai(team: str, alert: dict, memories: list[dict]) -> dict:
+    from openai import OpenAI
+
+    resp = OpenAI().chat.completions.parse(
+        model=config.OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM.format(team=team)},
+            {"role": "user", "content": f"{_alert_block(alert)}\n\n{_memory_block(memories)}"},
+        ],
+        response_format=Decision,
+    )
+    msg = resp.choices[0].message
+    if msg.parsed is None:
+        return _escalate(alert, msg.refusal or resp.choices[0].finish_reason)
+    return msg.parsed.model_dump()
 
 
 def _decide_claude(team: str, alert: dict, memories: list[dict]) -> dict:
@@ -88,8 +117,7 @@ def _decide_claude(team: str, alert: dict, memories: list[dict]) -> dict:
         output_format=Decision,
     )
     if resp.stop_reason == "refusal" or resp.parsed_output is None:
-        return {"action": "page_human", "target": alert["service"], "cited_memory_ids": [],
-                "rationale": f"Model returned no decision (stop_reason={resp.stop_reason}); escalating."}
+        return _escalate(alert, f"stop_reason={resp.stop_reason}")
     return resp.parsed_output.model_dump()
 
 

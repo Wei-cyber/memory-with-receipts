@@ -10,7 +10,10 @@ DB_NAME = os.getenv("RECEIPTS_DB", "receipts")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY") or None
 MODEL = os.getenv("RECEIPTS_MODEL", "claude-opus-5-5")
 EFFORT = os.getenv("RECEIPTS_EFFORT", "low")
-BRAIN = os.getenv("RECEIPTS_BRAIN", "auto")
+BRAIN = os.getenv("RECEIPTS_BRAIN", "auto")  # auto | claude | openai | stub
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or None
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY") or None
 VOYAGE_MODEL = os.getenv("VOYAGE_MODEL", "voyage-3.5")

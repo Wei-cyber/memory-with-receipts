@@ -70,7 +70,7 @@ uvicorn receipts.api:app    # http://localhost:8000
 
 `.env`:
 - `MONGODB_URI` — Atlas connection string. (For local dev, `docker compose up -d` runs `mongodb-atlas-local`, which has real `$vectorSearch`.)
-- `ANTHROPIC_API_KEY` — decisions are made by Claude. Without it, a deterministic rule-based stub stands in so everything still runs.
+- `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` — the model that makes decisions (Claude or OpenAI, structured output). With neither, a deterministic rule-based stub stands in so everything still runs.
 - `VOYAGE_API_KEY` — embeddings from Voyage AI (`voyage-3.5`, 1024 dims). Without it, a local hashing embedder stands in. Re-seed after switching embedders.
 
 Tests run against a real `$vectorSearch` (13 end-to-end cases covering isolation, correction, expiry, forgetting, quarantine, counterfactuals and chain integrity):
@@ -101,7 +101,7 @@ pytest
 ```
 receipts/memory.py     scoped retrieval, versioning, expiry, forgetting, strikes
 receipts/agent.py      the loop: retrieve → decide → counterfactuals → act → receipt; replay; outcomes
-receipts/brain.py      the decision (Claude, structured output) and the offline stub
+receipts/brain.py      the decision (Claude or OpenAI, structured output) and the offline stub
 receipts/db.py         schema validation, indexes, vector index definition
 receipts/identity.py   principals, scopes, permissions
 receipts/api.py        FastAPI
