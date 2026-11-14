@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receipts</title>
+<style>
+  :root {
+    --bg: #0f1412; --panel: #171e1b; --panel-2: #1e2723; --line: #2b3732;
+    --text: #e6ece8; --muted: #8fa097; --accent: #3ddc84; --accent-ink: #06210f;
+    --warn: #f2b84b; --bad: #ff7a6b; --info: #6cb8ff;
+    --paper: #f7f4ea; --paper-ink: #1d211f; --paper-muted: #6a716c; --paper-line: #cfcabb;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+           border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font: 700 17px var(--mono); margin: 0; letter-spacing: .04em; }
+  header h1 span { color: var(--accent); }
+  .tag { font: 11px var(--mono); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--line);
+         color: var(--muted); white-space: nowrap; }
+  .tag.ok { color: var(--accent); border-color: #1f5c3a; }
+  .tag.bad { color: var(--bad); border-color: #6b2b24; }
+  .tag.warn { color: var(--warn); border-color: #6b5220; }
+  .tag.info { color: var(--info); border-color: #24486b; }
+  .spacer { flex: 1; }
+  select, input, textarea { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  textarea { width: 100%; resize: vertical; }
+  button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--bad); }
+  button.small { padding: 2px 8px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: wait; }
+  main { display: grid; grid-template-columns: 270px minmax(0, 1fr) 380px; gap: 14px; padding: 14px 18px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  h2 { font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .scenario { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+  .scenario small, .rc small { display: block; color: var(--muted); font-size: 12px; }
+  .rc { padding: 7px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .rc:hover { background: var(--panel-2); }
+  .rc.sel { border-color: var(--accent); background: var(--panel-2); }
+  .rc code, .mem code, code { font: 12px var(--mono); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+  .dot.on { background: var(--accent); }
+
+  /* the receipt */
+  .receipt { background: var(--paper); color: var(--paper-ink); border-radius: 4px; padding: 22px 26px 26px;
+             font-family: var(--mono); font-size: 13px; position: relative; }
+  .receipt::after { content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px;
+             background: linear-gradient(-45deg, transparent 6px, var(--paper) 0) 0 0 / 12px 8px repeat-x,
+                         linear-gradient(45deg, transparent 6px, var(--paper) 0) 0 0 / 12px 8px repeat-x;
+             transform: scaleY(-1); }
+  .receipt h3 { margin: 0; font-size: 18px; letter-spacing: .2em; text-align: center; }
+  .receipt .sub { text-align: center; color: var(--paper-muted); font-size: 12px; margin-bottom: 4px; }
+  .receipt hr { border: 0; border-top: 1px dashed var(--paper-line); margin: 14px 0; }
+  .receipt .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--paper-muted); margin-bottom: 6px; }
+  .receipt .row { display: flex; justify-content: space-between; gap: 12px; }
+  .receipt .prose { font-family: system-ui, sans-serif; font-size: 14px; }
+  .receipt .chip { display: inline-block; border: 1px solid var(--paper-line); border-radius: 3px; padding: 1px 6px; font-size: 11px; margin: 0 4px 4px 0; background: #fffdf5; }
+  .receipt .chip.g { background: #d9f5e3; border-color: #7fcf9f; color: #0d5a2c; font-weight: 700; }
+  .receipt .chip.y { background: #fdeebf; border-color: #dcb650; color: #6b4b00; }
+  .receipt .chip.r { background: #fbdad5; border-color: #e19588; color: #8a2114; }
+  .receipt .chip.b { background: #dbeafb; border-color: #8db7e6; color: #174a80; }
+  .receipt .m { border-left: 3px solid var(--paper-line); padding: 6px 0 6px 10px; margin-bottom: 8px; }
+  .receipt .m.cited { border-left-color: #dcb650; }
+  .receipt .m.causal { border-left-color: #1f9d55; }
+  .receipt .m .withheld { color: var(--paper-muted); font-style: italic; }
+  .cf { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cf > div { border: 1px solid var(--paper-line); border-radius: 4px; padding: 10px; background: #fffdf5; }
+  .cf .act { font-size: 15px; font-weight: 700; }
+  .verdict { margin-top: 12px; padding: 9px 12px; border-radius: 4px; font-weight: 700; text-align: center; }
+  .verdict.yes { background: #1f9d55; color: #fff; }
+  .verdict.no { background: #e4e0d2; color: var(--paper-ink); }
+  .receipt button { background: #fffdf5; border-color: var(--paper-line); color: var(--paper-ink); font-family: system-ui, sans-serif; }
+  .receipt button.primary { background: var(--paper-ink); color: var(--paper); border-color: var(--paper-ink); }
+  .receipt input { background: #fffdf5; border-color: var(--paper-line); color: var(--paper-ink); font-family: system-ui, sans-serif; }
+  .diff { border: 2px solid var(--paper-ink); border-radius: 4px; padding: 12px; margin-top: 12px; background: #fffdf5; }
+  .diff .arrow { font-size: 16px; font-weight: 700; }
+  .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
+
+  /* vault */
+  .mem { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; margin-bottom: 8px; background: var(--panel-2); }
+  .mem.inactive { opacity: .6; }
+  .mem p { margin: 6px 0; }
+  .mem .meta { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .mem .stats { font: 11px var(--mono); color: var(--muted); }
+  .mem .stats b { color: var(--text); }
+  .ev { font: 12px var(--mono); color: var(--muted); padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .ev b { color: var(--text); font-weight: 600; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: min(560px, 92vw); padding: 18px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  dialog .rowf { display: flex; gap: 8px; } dialog .rowf > * { flex: 1; min-width: 0; }
+  dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 16px 0 0; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--bad); color: #fff;
+           padding: 8px 14px; border-radius: 6px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RECEIPTS<span>.</span></h1>
+  <span class="tag" id="t-brain"></span><span class="tag" id="t-embed"></span>
+  <button class="small" id="verify">verify chain</button><span class="tag" id="t-chain">chain: unchecked</span>
+  <span class="spacer"></span>
+  <label for="who" class="tag" style="border:0">acting as</label>
+  <select id="who"></select>
+  <span id="scopes"></span>
+  <button class="small danger" id="reset">reset demo</button>
+</header>
+
+<main>
+  <div>
+    <section class="panel">
+      <h2>Fire an alert</h2>
+      <div id="scenarios"></div>
+      <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--muted)">Custom alert</summary>
+        <label>Team <select id="c-team"><option>payments</option><option>search</option></select></label>
+        <input id="c-service" placeholder="service" style="width:100%;margin:6px 0">
+        <input id="c-title" placeholder="title" style="width:100%;margin-bottom:6px">
+        <textarea id="c-body" rows="2" placeholder="details"></textarea>
+        <button class="primary" id="c-fire" style="margin-top:6px">Fire</button>
+      </details>
+    </section>
+    <section class="panel"><h2>Receipts</h2><div id="receipts"></div></section>
+  </div>
+
+  <div id="detail"><div class="empty">Fire an alert. The agent will act, and leave a receipt.</div></div>
+
+  <div>
+    <section class="panel">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">
+        <span>Memory vault <span id="vault-scope" style="text-transform:none;letter-spacing:0"></span></span>
+        <button class="small" id="add-mem">+ add</button></h2>
+      <div id="memories"></div>
+    </section>
+    <section class="panel"><h2>Memory audit log</h2><div id="events"></div></section>
+  </div>
+</main>
+
+<dialog id="dlg"><form method="dialog" id="dlg-form"></form></dialog>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let META = null, ME = null, CURRENT = null, LAST_DIFF = null;
+
+async function api(path, opts = {}) {
+  const res = await fetch("/api" + path, {
+    method: opts.method || (opts.body ? "POST" : "GET"),
+    headers: { "Content-Type": "application/json", "X-Principal": $("who").value },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(data.detail || res.statusText); throw new Error(data.detail); }
+  return data;
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; setTimeout(() => (t.style.display = "none"), 3500); }
+const when = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function expiry(m) {
+  if (m.status !== "active") return "";
+  if (!m.expires_at) return "no expiry";
+  const d = Math.round((new Date(m.expires_at) - Date.now()) / 864e5);
+  return d >= 1 ? `expires in ${d}d` : "expires today";
+}
+
+async function boot() {
+  META = await (await fetch("/api/meta")).json();
+  const keep = $("who").value || "alice";
+  $("who").innerHTML = META.principals.filter((p) => p.kind === "human").map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  $("who").value = keep;
+  $("t-brain").textContent = "brain: " + META.brain;
+  $("t-embed").textContent = "embed: " + META.embedder;
+  $("scenarios").innerHTML = META.scenarios.map((s, i) =>
+    `<button class="scenario" data-i="${i}">${esc(s.label)}<small>→ ${esc(s.team)} agent · ${esc(s.service)}</small></button>`).join("");
+  await refresh();
+}
+
+async function refresh() {
+  ME = META.principals.find((p) => p.id === $("who").value);
+  $("scopes").innerHTML = ME.scopes.map((s) => `<span class="tag info">${esc(s)}</span>`).join(" ") +
+    (ME.roles.includes("auditor") ? ' <span class="tag warn">auditor</span>' : "");
+  $("vault-scope").textContent = "· readable by " + ME.id;
+  const [receipts, memories, events] = await Promise.all([api("/receipts"), api("/memories"), api("/events")]);
+  $("receipts").innerHTML = receipts.map((r) => `
+    <div class="rc ${CURRENT === r._id ? "sel" : ""}" data-id="${esc(r._id)}">
+      <span class="dot ${r.influence.changed_action ? "on" : ""}" title="${r.influence.changed_action ? "memory changed the action" : "memory did not change the action"}"></span>
+      <code>#${r.seq}</code> ${esc(r.decision.action)} ${r.replay_of ? '<span class="tag info">replay</span>' : ""}
+      <small>${esc(r.principal.team)} · ${esc(r.alert.service)} · ${when(r.at)} · ${esc(r.outcome.status)}</small>
+    </div>`).join("") || '<div style="color:var(--muted)">None readable by you yet.</div>';
+  $("memories").innerHTML = memories.map(memCard).join("") || '<div style="color:var(--muted)">Nothing in your scopes.</div>';
+  $("events").innerHTML = events.map((e) =>
+    `<div class="ev">${when(e.at)} <b>${esc(e.type)}</b> ${esc(e.memory_id)} by ${esc(e.actor)}${e.detail && e.detail.reason ? " — " + esc(e.detail.reason) : ""}</div>`).join("");
+}
+
+function memCard(m) {
+  const cls = { active: "ok", quarantined: "warn", superseded: "", expired: "", forgotten: "bad" }[m.status];
+  const s = m.stats;
+  return `<div class="mem ${m.status === "active" ? "" : "inactive"}">
+    <div class="meta"><code>${esc(m._id)}</code><span class="tag">v${m.version}</span>
+      <span class="tag ${cls}">${esc(m.status)}</span>
+      ${m.audience.map((a) => `<span class="tag info">${esc(a)}</span>`).join("")}
+      ${m.kind === "caveat" ? '<span class="tag warn">caveat</span>' : ""}
+      <span class="tag">${esc(expiry(m))}</span></div>
+    <p>${m.text ? esc(m.text) : `<i style="color:var(--muted)">content erased ${m.forgotten_by ? "by " + esc(m.forgotten_by) : ""} · hash ${esc(m.content_hash)}</i>`}</p>
+    <div class="meta"><span class="stats">shown <b>${s.shown}</b> · cited <b>${s.cited}</b> · causal <b>${s.causal}</b> · wins <b>${s.wins}</b> · strikes <b>${s.strikes}</b></span>
+      <span class="spacer"></span>
+      ${m.can_curate && (m.status === "active" || m.status === "quarantined") ? `<button class="small" data-correct="${esc(m._id)}">correct</button>` : ""}
+      ${m.can_curate && m.status === "quarantined" ? `<button class="small" data-release="${esc(m._id)}">release</button>` : ""}
+      ${m.can_curate && m.status !== "forgotten" ? `<button class="small danger" data-forget="${esc(m._id)}">forget</button>` : ""}
+    </div></div>`;
+}
+
+function act(d) { return `<div class="act">${esc(d.action)}</div><div>on ${esc(d.target)}</div>`; }
+
+function receiptHtml(r, diff) {
+  const f = r.retrieval.filter, w = r.retrieval.withheld, inf = r.influence, cf = r.counterfactual;
+  const mems = r.retrieval.shown.map((m) => `
+    <div class="m ${m.causal ? "causal" : m.cited ? "cited" : ""}">
+      <div><b>${esc(m.memory_id)}</b> v${m.version} · score ${m.score.toFixed(3)} · ${m.audience.map(esc).join(", ")}
+        ${m.causal ? '<span class="chip g">CAUSAL</span>' : ""}${m.cited ? '<span class="chip y">cited</span>' : '<span class="chip">in prompt, unused</span>'}
+        ${m.status_now !== "active" ? `<span class="chip r">now ${esc(m.status_now)}${m.superseded_by ? " → " + esc(m.superseded_by) : ""}</span>` : ""}</div>
+      <div class="prose">${m.text ? esc(m.text) : `<span class="withheld">${m.withheld_from_viewer ? "outside your scopes" : "content erased"} — sha256 ${esc(m.content_hash)}</span>`}</div>
+    </div>`).join("") || '<div class="prose" style="color:var(--paper-muted)">No memory in scope matched.</div>';
+  const loo = cf.leave_one_out.map((x) =>
+    `<div>without <b>${esc(x.memory_id)}</b> → ${esc(x.action)} on ${esc(x.target)} ${x.flips ? '<span class="chip g">action flips</span>' : '<span class="chip">no change</span>'}</div>`).join("");
+  const canJudge = r.outcome.status === "pending" && ME.kind === "human" && ME.team === r.principal.team;
+  const outcome = r.outcome.status === "pending"
+    ? (canJudge ? `<div class="row" style="align-items:center"><input id="note" placeholder="what happened? (optional note)" style="flex:1">
+        <button class="primary" data-outcome="resolved">It worked</button><button data-outcome="failed">It didn't</button></div>`
+      : `<div class="prose">Awaiting an outcome from the ${esc(r.principal.team)} team.</div>`)
+    : r.outcome.status === "dry_run" ? '<div class="prose">Dry run — nothing was executed.</div>'
+    : `<div class="prose"><span class="chip ${r.outcome.status === "resolved" ? "g" : "r"}">${esc(r.outcome.status)}</span> by ${esc(r.outcome.by)}${r.outcome.note ? " — " + esc(r.outcome.note) : ""}
+        ${r.outcome.learned_memory_id ? `<br>Learned <b>${esc(r.outcome.learned_memory_id)}</b> from this receipt.` : ""}
+        ${(r.outcome.quarantined || []).length ? `<br>Quarantined: <b>${r.outcome.quarantined.map(esc).join(", ")}</b>` : ""}</div>`;
+  const diffHtml = diff ? `<div class="diff"><div class="lbl">Replay of ${esc(r.replay_of)} against memory as it is now</div>
+      <div class="arrow">${esc(diff.before.action)} on ${esc(diff.before.target)} &nbsp;→&nbsp; ${esc(diff.after.action)} on ${esc(diff.after.target)}</div>
+      <div class="prose" style="margin-top:6px">${diff.action_changed ? "<b>The action changed.</b>" : "Same action."}
+        ${diff.memories_dropped.map((d) => `<br>− ${esc(d.memory_id)} is now <b>${esc(d.now)}</b>${d.superseded_by ? ` (replaced by ${esc(d.superseded_by)})` : ""}`).join("")}
+        ${diff.memories_added.map((id) => `<br>+ ${esc(id)} is new since then`).join("")}</div></div>` : "";
+  return `<div class="receipt">
+    <h3>RECEIPT</h3>
+    <div class="sub">${esc(r._id)} · #${r.seq} · ${new Date(r.at).toLocaleString()}</div>
+    <div class="sub">${esc(r.principal.id)} ${r.replay_of ? "· replay of " + esc(r.replay_of) : ""} · ${esc(r.decision.brain)}</div>
+    ${diffHtml}
+    <hr><div class="lbl">Alert</div>
+    <div class="prose"><b>${esc(r.alert.service)}</b> — ${esc(r.alert.title)}<br><span style="color:var(--paper-muted)">${esc(r.alert.body)}</span></div>
+    <hr><div class="lbl">What the agent was allowed to see</div>
+    <div><span class="chip b">audience ∈ [${f.audience.$in.map(esc).join(", ")}]</span><span class="chip b">status = active</span><span class="chip b">expires_at &gt; now</span>
+      <span class="chip">$vectorSearch · ${esc(r.retrieval.index)} · ${esc(r.retrieval.embedder)}</span></div>
+    <div style="margin:4px 0 10px">${w.count
+      ? `<span class="chip r">${w.count} of the top ${w.of_top} matches org-wide withheld by scope</span> ${Object.entries(w.by_scope).map(([k, v]) => `<span class="chip">${esc(k)} ×${v}</span>`).join("")}`
+      : '<span class="chip">nothing relevant was withheld</span>'}</div>
+    ${mems}
+    <hr><div class="lbl">Decision vs. counterfactual</div>
+    <div class="cf">
+      <div><div class="lbl">With memory — ${r.executed ? "executed" : "dry run"}</div>${act(r.decision)}<div class="prose" style="margin-top:6px">${esc(r.decision.rationale)}</div></div>
+      <div><div class="lbl">Same alert, memory removed</div>${act(cf.without_memory)}<div class="prose" style="margin-top:6px">${esc(cf.without_memory.rationale)}</div></div>
+    </div>
+    ${loo ? `<div style="margin-top:10px"><div class="lbl">Leave one out</div>${loo}</div>` : ""}
+    <div class="verdict ${inf.changed_action ? "yes" : "no"}">${inf.changed_action
+      ? `MEMORY CHANGED THE ACTION · ${inf.causal_memory_ids.map(esc).join(", ")}${inf.joint ? " (jointly)" : ""}`
+      : inf.causal_memory_ids.length ? `MEMORY CONFIRMED THE DEFAULT · ${inf.causal_memory_ids.map(esc).join(", ")} outweighed other memories`
+      : "MEMORY DID NOT CHANGE THE ACTION"}</div>
+    <hr><div class="lbl">Outcome</div>${outcome}
+    <hr><div class="row" style="align-items:center">
+      <span style="color:var(--paper-muted);font-size:11px">prev ${esc(r.prev_hash.slice(0, 12))}… → sha256 ${esc(r.hash.slice(0, 20))}…</span>
+      ${r.replay_of ? "" : '<button data-replay="1">Replay against current memory</button>'}</div>
+  </div>`;
+}
+
+async function show(id, diff = null) {
+  CURRENT = id; LAST_DIFF = diff;
+  const r = await api("/receipts/" + id);
+  $("detail").innerHTML = receiptHtml(r, diff);
+  await refresh();
+}
+
+async function fire(alert, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api("/alerts", { body: alert });
+    if (r.readable === false) { toast(`Routed to ${r.routed_to}. Its receipt is not readable by ${ME.id}.`); await refresh(); }
+    else await show(r._id);
+  } finally { if (btn) btn.disabled = false; }
+}
+
+function dialog(html, onSubmit) {
+  $("dlg-form").innerHTML = html + '<menu><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Save</button></menu>';
+  $("dlg").onclose = async () => { if ($("dlg").returnValue === "ok") { try { await onSubmit(); } catch (e) {} await refresh(); if (CURRENT) show(CURRENT, LAST_DIFF); } };
+  $("dlg").returnValue = ""; $("dlg").showModal();
+}
+const actionFields = () => `<label>What should the agent do instead? (optional)</label><div class="rowf">
+  <select id="d-action"><option value="">— none —</option>${META.actions.map((a) => `<option>${a}</option>`).join("")}</select>
+  <input id="d-target" placeholder="target, e.g. checkout-db-replica"></div>`;
+const actionValue = () => $("d-action").value ? { action: $("d-action").value, target: $("d-target").value || "unknown" } : null;
+
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest("button, .rc"); if (!t) return;
+  const d = t.dataset;
+  if (d.i !== undefined) return fire(META.scenarios[d.i], t);
+  if (t.classList.contains("rc")) return show(d.id);
+  if (d.outcome) { t.disabled = true; await api(`/receipts/${CURRENT}/outcome`, { body: { status: d.outcome, note: $("note").value } }); return show(CURRENT); }
+  if (d.replay) { t.disabled = true; try { const out = await api(`/receipts/${CURRENT}/replay`, { body: {} }); return show(out.replay._id, out.diff); } finally { t.disabled = false; } }
+  if (d.correct) {
+    const mems = await api("/memories"), m = mems.find((x) => x._id === d.correct);
+    return dialog(`<h2>Correct ${esc(m._id)} → v${m.version + 1}</h2><label>Corrected memory</label><textarea id="d-text" rows="5" required>${esc(m.text)}</textarea>
+      ${actionFields()}<label>Why? (goes in the audit log)</label><input id="d-reason" required style="width:100%">`,
+      () => api(`/memories/${m._id}/correct`, { body: { text: $("d-text").value, reason: $("d-reason").value, suggested_action: actionValue() } }));
+  }
+  if (d.forget) return dialog(`<h2>Forget ${esc(d.forget)}</h2><p>Erases the text and embedding of <b>every version</b>. Receipts that used it keep only its hash. This cannot be undone.</p>
+      <label>Why? (goes in the audit log)</label><input id="d-reason" required style="width:100%">`,
+      () => api(`/memories/${d.forget}/forget`, { body: { reason: $("d-reason").value } }));
+  if (d.release) return dialog(`<h2>Release ${esc(d.release)} from quarantine</h2><label>Why?</label><input id="d-reason" required style="width:100%">`,
+      () => api(`/memories/${d.release}/release`, { body: { reason: $("d-reason").value } }));
+  if (t.id === "add-mem") return dialog(`<h2>New memory</h2><label>What should the agent remember?</label><textarea id="d-text" rows="4" required></textarea>
+      <div class="rowf"><div><label>Service</label><input id="d-service" style="width:100%"></div>
+      <div><label>Readable by</label><select id="d-aud" style="width:100%">${ME.team ? `<option>team:${esc(ME.team)}</option>` : ""}<option>org</option></select></div>
+      <div><label>Lives for (days, blank = until removed)</label><input id="d-ttl" type="number" min="1" value="90" style="width:100%"></div></div>${actionFields()}`,
+      () => api("/memories", { body: { text: $("d-text").value, service: $("d-service").value || null, audience: [$("d-aud").value],
+        ttl_days: $("d-ttl").value ? Number($("d-ttl").value) : null, suggested_action: actionValue() } }));
+  if (t.id === "c-fire") return fire({ team: $("c-team").value, service: $("c-service").value, title: $("c-title").value, body: $("c-body").value }, t);
+  if (t.id === "verify") { const v = await api("/receipts/verify"); const el = $("t-chain");
+    el.textContent = v.ok ? `chain intact · ${v.checked} receipts` : `chain BROKEN at ${v.broken_at}`; el.className = "tag " + (v.ok ? "ok" : "bad"); return; }
+  if (t.id === "reset") { if (!confirm("Wipe all memories and receipts and re-seed the demo?")) return; t.disabled = true;
+    await api("/reset", { body: {} }); t.disabled = false; CURRENT = null; $("detail").innerHTML = '<div class="empty">Reset. Fire an alert.</div>'; return boot(); }
+});
+$("who").addEventListener("change", async () => {
+  await refresh();
+  if (CURRENT) show(CURRENT, LAST_DIFF).catch(() => { CURRENT = null; $("detail").innerHTML = `<div class="empty">That receipt is not readable by ${esc(ME.id)}.</div>`; refresh(); });
+});
+boot();
+</script>
+</body>
+</html>
