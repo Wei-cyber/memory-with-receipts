@@ -82,15 +82,6 @@ Tests run against a real `$vectorSearch` (13 end-to-end cases covering isolation
 pytest
 ```
 
-## Three-minute demo
-
-1. **As Alice (payments)**, fire *Checkout latency spike*. Receipt: agent flushed the connection pool; without memory it would have restarted the service; one memory is **CAUSAL**; two relevant Search memories were withheld by scope.
-2. **Switch to Bob (search)**, fire *Search latency spike* — near-identical alert, different team. Different memories, different action. Bob cannot open Alice's receipt.
-3. **Back to Alice.** Correct the pool-flush memory ("since the v2 migration this drops live transactions — fail over to the replica"). Open receipt #1 → **Replay**. The diff shows v1 superseded, v2 added, and the action changed.
-4. Mark a receipt **It didn't work**. A caveat memory appears; fire the alert again and the agent avoids the failed action, citing the caveat.
-5. **Forget** a memory. Its text is gone from every version; old receipts show only the hash.
-6. **Switch to Carol (auditor)**: every receipt is readable, team memory text is not. Click **verify chain**.
-
 ## Honest limits
 
 - Identity is a demo header (`X-Principal`). Scopes are derived server-side from the stored principal; swap `identity.resolve` for a real IdP.
